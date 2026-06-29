@@ -1,6 +1,0 @@
-thetadata
-pandas
-pyarrow
-python-dotenv
-requests
-yfinance
