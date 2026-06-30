@@ -3,6 +3,5 @@ pyarrow
 python-dotenv
 requests
 yfinance
-thetadata
 flask
 plotly
