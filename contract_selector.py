@@ -1,4 +1,4 @@
-﻿"""
+"""
 contract_selector.py — Score 0DTE contracts using GEX levels, liquidity, and greeks.
 
 Bullish bias strongly favors OTM lottery calls ($0.50-$2.00, delta 0.15-0.45, volume).
@@ -220,5 +220,35 @@ def select_contracts(ticker: str, top_n: int = 8) -> dict[str, Any]:
     labeled = label_top_levels(gex_list, spot, flip)
     call_wall = next((lv["strike"] for lv in labeled if lv["type"] == "Call Wall"), None)
     put_wall = next((lv["strike"] for lv in labeled if lv["type"] == "Put Wall"), None)
-    scored = [score_contract(c, spot, flip, gex_list, call_wall, put_wall, bias)
-              for c in fetch_contracts_
+    scored = [score_contract(c, spot, flip, gex_list, call_wall, put_wall, bias) for c in fetch_contracts_near_spot(ticker, spot, bias)]
+    if bias == "BULLISH":
+        scored = [s for s in scored if s["side"] == "CALL"] or scored
+    elif bias == "BEARISH":
+        scored = [s for s in scored if s["side"] == "PUT"] or scored
+    scored.sort(key=lambda x: (-_rank_key(x)[0], -_rank_key(x)[1], -_rank_key(x)[2]))
+    picks = [s for s in scored if s["score"] >= MIN_SCORE and s["bid"] > 0 and s["ask"] > 0][:top_n]
+    return {"ticker": ticker.upper(), "spot": spot, "flip": flip, "call_wall": call_wall,
+            "put_wall": put_wall, "bias": bias_info, "picks": picks, "scored_count": len(scored)}
+
+
+def print_report(result: dict[str, Any]) -> None:
+    print(f"\n=== 0DTE Contract Selector: {result['ticker']} ===")
+    print(f"Spot: {result['spot']:,.2f}  Flip: {result['flip']}  Bias: {result['bias']['bias']}")
+    for i, p in enumerate(result["picks"], 1):
+        print(f"  {i}. {p['side']} {p['strike']:.0f}  score={p['score']}  LOT={p['lotto_pts']}  "
+              f"delta={p['delta']:.2f}  mid=${p.get('mid')}  OI={p['oi']}")
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("ticker", nargs="?", default="SPX")
+    ap.add_argument("--top", type=int, default=8)
+    ap.add_argument("--full", action="store_true", help="Run SPX and QQQ")
+    a = ap.parse_args()
+    tickers = ["SPX", "QQQ"] if a.full else [a.ticker.upper()]
+    for t in tickers:
+        print_report(select_contracts(t, top_n=a.top))
+
+
+if __name__ == "__main__":
+    main()
